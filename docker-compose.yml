@@ -1,0 +1,22 @@
+# Quant-Demo 容器编排
+#
+#   docker compose up --build                        45 秒冒烟
+#   docker compose run --rm quantedemo -- selfcheck   离线自检, 不连网
+#
+# 运行产物绑定到宿主机 ./data/, 跑完直接在本地读:
+#
+#   python -c "import pyarrow.parquet as pq; \
+#     print(pq.read_table('data/market_data.parquet').to_pandas().tail())"
+#
+# 需要 15 分钟压测, 把下面 command 改成 ["--duration", "900"]
+services:
+  quantedemo:
+    build: .
+    image: quantedemo:latest
+    container_name: quantedemo
+    command: ["--duration", "45"]
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./data:/data
+    restart: "no"

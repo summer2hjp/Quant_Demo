@@ -64,6 +64,38 @@ python hft_binance_demo.py --help             # 全部参数
 | `--no-raw` | 关 | 仅保留 PRD 5.2 四列 |
 | `--no-uvloop` | 关 | 使用默认事件循环 |
 
+### Docker 部署
+
+需要 Docker 20.10+(含 Compose v2)。镜像与本机跑的是同一份行为 —— 同为 Python 3.9 运行时。
+
+```bash
+docker build -t quantedemo .                     # 构建
+
+docker run --rm quantedemo selfcheck             # 离线自检 18 项, 不连网, 退出码 0 = 通过
+docker run --rm quantedemo --duration 60         # 冒烟测试
+docker run --rm quantedemo --duration 900        # 15 分钟压测
+docker run --rm -v "$PWD/data":/data quantedemo --duration 900   # 产物留在宿主机
+docker run --rm quantedemo --help                # 全部参数
+```
+
+命令后的参数**原样透传**给 `hft_binance_demo.py`,与本地完全一致:`--symbol` / `--stream-url` / `--no-raw` / `--ring-capacity` 等照常使用。`selfcheck` 是唯一特殊关键字,对应 `Test/acceptance_check.py`。
+
+用 Compose(产物绑定到宿主机 `./data/`,跑完直接读本地文件):
+
+```bash
+docker compose up --build
+docker compose run --rm quantedemo -- selfcheck
+```
+
+| 项 | 说明 |
+| :--- | :--- |
+| 运行时 | `python:3.9-slim`,与本机已验证的 3.9.6 一致;升级只需改 `Dockerfile` 的 `FROM` |
+| 产物路径 | 容器 `WORKDIR` 为 `/data`,默认输出直接落这里;已声明 `VOLUME ["/data"]` |
+| 权限 | 非 root 用户(uid 10001)运行 |
+| 时区 | `Asia/Shanghai`,日志时间戳与 `recv_utc_ms` 的转换口径一致 |
+| 依赖层缓存 | 先装依赖再拷源码,`requirements.txt` 不变时仅改源码可复用整层缓存 |
+| 镜像架构 | 按本机构建,Apple Silicon 产出 arm64;跨架构用 `docker buildx build --platform linux/amd64 -t quantedemo .` |
+
 ---
 
 ## 输出
@@ -154,7 +186,9 @@ print(df.tail())
 | `Test/TEST.md` | **验收测试手册**:逐条命令、期望输出、判定标准 |
 | `Test/acceptance_check.py` | 离线静态自检脚本(18 项,不连网) |
 | `REPORT.md` | 项目报告:架构、验收结果、缺陷记录、偏差分析 |
+| `Final_Report.md` | 开发过程总结:设计张力、人机协作、验证方法论 |
 | `CLAUDE.md` | AI 协作指引:设计红线、环境约束、常见陷阱 |
+| `Dockerfile` / `docker-compose.yml` | 容器化部署配置(详见上方「Docker 部署」) |
 | `hft_binance_demo.py` | 全部实现源码 |
 
 ---

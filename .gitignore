@@ -7,3 +7,6 @@ __pycache__/
 #   system.log           同上; 且写入中缺少页脚元数据, 是不可读文件
 market_data.parquet
 system.log
+
+# Docker 卷绑定目录 (docker-compose.yml 的 ./data:/data)
+data/

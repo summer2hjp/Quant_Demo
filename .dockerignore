@@ -1,0 +1,31 @@
+# 虚拟环境 (~190 MB)。容器内按 requirements.txt 重新安装, 拷进来纯属浪费
+.venv/
+venv/
+
+# 版本控制
+.git/
+.gitignore
+
+# 运行产物: 可再生, 交付物是"一次干净运行", 不应混入镜像
+market_data.parquet
+system.log
+*.parquet
+*.log
+data/
+
+# 字节码与各类缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+
+# 容器配置自身, 避免镜像引用自己
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 临时下载 (如 Data Vision 逐笔档案)
+*.zip
+*.tar.gz
