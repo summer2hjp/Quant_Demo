@@ -61,6 +61,11 @@ python hft_binance_demo.py --help             # 全部参数
 | `--stream-url` | 按 symbol 拼接 | 覆盖默认 WS 地址,可指向镜像端点 |
 | `--ring-capacity` | `2000000` | 环形缓冲区容量 |
 | `--persist-batch` | `5000` | 微批落盘行数 |
+| `--queue-maxsize` | `100000` | 落盘队列容量,**直接决定内存上限**(每条 row 约 350 字节) |
+| `--persist-flush-timeout` | `60` | 无新数据时兜底刷盘间隔(秒) |
+| `--reconnect-base` | `2` | 断线重连基准退避(秒) |
+| `--reconnect-max` | `30` | 重连退避上限(秒) |
+| `--stats-interval` | `30` | 周期观测日志间隔(秒) |
 | `--no-raw` | 关 | 仅保留 PRD 5.2 四列 |
 | `--no-uvloop` | 关 | 使用默认事件循环 |
 

@@ -247,6 +247,11 @@ class HFTPipeline:
         self.zsell = ZSCORE_SELL
         self.zbuy = ZSCORE_BUY
         self.persist_batch = args.persist_batch
+        self.queue_maxsize = args.queue_maxsize
+        self.flush_timeout = args.persist_flush_timeout
+        self.reconnect_base = args.reconnect_base
+        self.reconnect_max = args.reconnect_max
+        self.stats_interval = args.stats_interval
         self.keep_raw = args.keep_raw                    # 无损保留币安原始字符串
         self._schema = PARQUET_SCHEMA_FULL if args.keep_raw else PARQUET_SCHEMA
 
@@ -284,7 +289,7 @@ class HFTPipeline:
         可以在事件循环外安全构造 (也便于单组件测试)。
         """
         if self.__queue is None:
-            self.__queue = asyncio.Queue(maxsize=QUEUE_MAXSIZE)
+            self.__queue = asyncio.Queue(maxsize=self.queue_maxsize)
         return self.__queue
 
     # ---------------- 数据摄取 (FR-1) ----------------
@@ -346,7 +351,7 @@ class HFTPipeline:
 
     async def _ingest_loop(self) -> None:
         """连接 + 断线重连外壳 (FR-1.4: 2 秒退避, 指数增长)。"""
-        backoff = RECONNECT_BASE_SECONDS
+        backoff = self.reconnect_base
         while True:
             try:
                 async with websockets.connect(
@@ -358,7 +363,7 @@ class HFTPipeline:
                     max_size=1 << 20,
                 ) as ws:
                     self.logger.info("✅ WebSocket connected: %s", self.stream_url)
-                    backoff = RECONNECT_BASE_SECONDS
+                    backoff = self.reconnect_base
                     await self._consume(ws)
             except asyncio.CancelledError:
                 raise
@@ -373,7 +378,7 @@ class HFTPipeline:
                     await asyncio.sleep(sleep_for)
                 except asyncio.CancelledError:
                     raise
-                backoff = min(backoff * 2, RECONNECT_MAX_SECONDS)
+                backoff = min(backoff * 2, self.reconnect_max)
 
     async def _consume(self, ws) -> None:
         """单连接消息消费热路径。每一行都为纳秒级延迟预算让路。"""
@@ -493,7 +498,7 @@ class HFTPipeline:
 
     async def _get_row_or_timeout(self):
         try:
-            return await asyncio.wait_for(self._queue.get(), timeout=PERSIST_FLUSH_TIMEOUT)
+            return await asyncio.wait_for(self._queue.get(), timeout=self.flush_timeout)
         except asyncio.TimeoutError:
             return None
 
@@ -585,12 +590,12 @@ class HFTPipeline:
     # ---------------- 可观测性 (NFR-3) ----------------
     async def _stats_loop(self) -> None:
         while True:
-            await asyncio.sleep(STATS_INTERVAL_SECONDS)
+            await asyncio.sleep(self.stats_interval)
             self._log_stats()
 
     def _log_stats(self) -> None:
         elapsed = time.perf_counter() - self.start_ts
-        interval_tps = self._window_received / STATS_INTERVAL_SECONDS
+        interval_tps = self._window_received / self.stats_interval
         if interval_tps > self._window_peak_tps:
             self._window_peak_tps = interval_tps
         self._window_received = 0
@@ -671,6 +676,16 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                    help="覆盖默认 WS 地址 (默认按 symbol 拼 stream.binance.com:9443)")
     p.add_argument("--ring-capacity", type=int, default=RING_CAPACITY, help="环形缓冲区容量")
     p.add_argument("--persist-batch", type=int, default=PERSIST_BATCH, help="微批落盘行数")
+    p.add_argument("--queue-maxsize", type=int, default=QUEUE_MAXSIZE,
+                   help="落盘队列容量; 直接决定内存上限 (每条 row 约 350 字节)")
+    p.add_argument("--persist-flush-timeout", type=float, default=PERSIST_FLUSH_TIMEOUT,
+                   help="无新数据时兜底刷盘间隔秒数, 低频期防止残余数据滞留")
+    p.add_argument("--reconnect-base", type=float, default=RECONNECT_BASE_SECONDS,
+                   help="断线重连基准退避秒数 (指数增长, 叠加抖动)")
+    p.add_argument("--reconnect-max", type=float, default=RECONNECT_MAX_SECONDS,
+                   help="重连退避上限秒数")
+    p.add_argument("--stats-interval", type=float, default=STATS_INTERVAL_SECONDS,
+                   help="周期观测日志间隔秒数")
     p.add_argument("--no-uvloop", action="store_true", help="禁用 uvloop, 使用默认事件循环")
     p.add_argument("--no-raw", action="store_true",
                    help="落盘仅保留 PRD 5.2 的四个字段; 默认追加 recv_utc_ms / price_raw / "
@@ -689,8 +704,19 @@ def validate_args(args: argparse.Namespace) -> Optional[str]:
     if args.ring_capacity < max(VWAP_WINDOW, MOMENTUM_WINDOW):
         return "ring_capacity(%d) 必须 >= 因子窗口(%d), 否则无法计算 VWAP" % (
             args.ring_capacity, VWAP_WINDOW)
-    if args.persist_batch < 1 or args.persist_batch > QUEUE_MAXSIZE:
-        return "persist_batch(%d) 必须在 [1, %d] 区间" % (args.persist_batch, QUEUE_MAXSIZE)
+    if args.queue_maxsize < 1:
+        return "queue_maxsize(%d) 必须 >= 1" % args.queue_maxsize
+    if args.persist_batch < 1 or args.persist_batch > args.queue_maxsize:
+        return "persist_batch(%d) 必须在 [1, %d] 区间" % (args.persist_batch, args.queue_maxsize)
+    if args.persist_flush_timeout <= 0:
+        return "persist_flush_timeout(%s) 必须 > 0" % args.persist_flush_timeout
+    if args.reconnect_base <= 0:
+        return "reconnect_base(%s) 必须 > 0" % args.reconnect_base
+    if args.reconnect_max < args.reconnect_base:
+        return "reconnect_max(%s) 必须 >= reconnect_base(%s)" % (
+            args.reconnect_max, args.reconnect_base)
+    if args.stats_interval <= 0:
+        return "stats_interval(%s) 必须 > 0" % args.stats_interval
     return None
 
 
@@ -709,7 +735,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                 args.symbol, args.duration, args.output, args.log_file)
     logger.info("配置: ring=%d 触发=%dticks VWAP窗=%d 动量窗=%d 队列=%d 微批=%d",
                 args.ring_capacity, PIPELINE_TRIGGER_TICKS, VWAP_WINDOW, MOMENTUM_WINDOW,
-                QUEUE_MAXSIZE, args.persist_batch)
+                args.queue_maxsize, args.persist_batch)
+    logger.info("部署参数: 刷盘兜底=%.1fs 重连=%.1f→%.1fs 观测=%.1fs",
+                args.persist_flush_timeout, args.reconnect_base, args.reconnect_max,
+                args.stats_interval)
     logger.info("落盘精度: %s",
                 "无损保留币安原始字符串 (price_raw/quantity_raw) + recv_utc_ms 墙钟时间"
                 if args.keep_raw else

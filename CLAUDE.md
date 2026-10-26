@@ -37,7 +37,9 @@ pip install -r requirements.txt
 python hft_binance_demo.py                          # 15-minute run (900s), writes system.log + market_data.parquet
 python hft_binance_demo.py --duration 60            # quick smoke test
 python hft_binance_demo.py --help                   # --symbol / --output / --log-file / --ring-capacity /
-                                                    # --persist-batch / --stream-url / --no-uvloop / --no-raw
+                                                    # --persist-batch / --stream-url / --no-uvloop / --no-raw,
+                                                    # 外加部署参数 --queue-maxsize / --persist-flush-timeout /
+                                                    # --reconnect-base / --reconnect-max / --stats-interval
 
 # Verify persisted data (PRD 8.3, acceptance TC-04)
 python -c "import pyarrow.parquet as pq; df=pq.read_table('market_data.parquet').to_pandas(); print(len(df))"
@@ -96,6 +98,14 @@ WebSocket → [byte filter + perf_counter_ns] → Ring Buffer
 
 500-tick strategy cadence and 5,000-row persistence batch are **decoupled with separate accumulators**.
 Merging them into one counter is the likeliest way to introduce a silent integrity bug.
+
+The **strategy constants stay hardcoded** on purpose (`PIPELINE_TRIGGER_TICKS`, `VWAP_WINDOW`,
+`MOMENTUM_WINDOW`, `ZSCORE_*`) — those are PRD-fixed policy parameters, not deploy knobs; a flag to
+retune them would mean silently changing the strategy. What *is* CLI-tunable (all with
+PRD-preserving defaults) are the resource/operational ones: `--queue-maxsize` (memory ceiling —
+one backlog row is ~350 bytes), `--persist-flush-timeout`, `--reconnect-base/-max`,
+`--stats-interval`. `validate_args` cross-checks `--persist-batch <= --queue-maxsize`, so
+shrinking the queue without shrinking the batch is rejected instead of silently dropped.
 
 **`PERSIST_FLUSH_TIMEOUT = 60s` is the third number that matters.** `_persist_loop` awaits
 `queue.get()` with a 60s timeout and flushes whatever has accumulated if no tick arrives that long.

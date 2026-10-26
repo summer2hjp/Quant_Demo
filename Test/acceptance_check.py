@@ -41,6 +41,7 @@ from hft_binance_demo import (
     PARQUET_SCHEMA,
     PARQUET_SCHEMA_FULL,
     RingBuffer,
+    parse_args,
 )
 
 FAIL = []
@@ -57,10 +58,16 @@ def check(name, cond, detail=""):
 
 
 def make(keep_raw=True, batch=2, cap=10000, output=TMP_LOSSLESS):
-    """构造一个不落真网的管线实例, 用于直接驱动内部组件。"""
-    a = argparse.Namespace(symbol="BTCUSDT", output=output, duration=1,
-                           ring_capacity=cap, persist_batch=batch,
-                           stream_url=None, keep_raw=keep_raw)
+    """构造一个不落真网的管线实例, 用于直接驱动内部组件。
+
+    以 parse_args 的默认值为基座再覆盖字段: 这样给主程序新增命令行参数时,
+    本脚本不会因手写的 Namespace 缺字段而失配。
+    注: 不用 Namespace.update (3.10 才有), 项目兼容 3.9。
+    """
+    a = parse_args([])
+    vars(a).update(symbol="BTCUSDT", output=output, duration=1,
+                   ring_capacity=cap, persist_batch=batch,
+                   stream_url=None, keep_raw=keep_raw)
     return HFTPipeline(a, logging.getLogger("ac"))
 
 
