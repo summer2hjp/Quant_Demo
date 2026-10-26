@@ -1,3 +1,9 @@
 .venv/
 __pycache__/
 *.pyc
+
+# 运行产物: 可再生, 无需入库
+#   market_data.parquet  重跑 python hft_binance_demo.py 即得
+#   system.log           同上; 且写入中缺少页脚元数据, 是不可读文件
+market_data.parquet
+system.log
