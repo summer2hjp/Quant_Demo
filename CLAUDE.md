@@ -4,9 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-HFT-Demo — a Binance `btcusdt@trade` WebSocket → factor computation → signal output → Parquet
+Quant-Demo — a Binance `btcusdt@trade` WebSocket → factor computation → signal output → Parquet
 persistence pipeline, specified in `PRD.md` (Chinese) and implemented in `hft_binance_demo.py`.
 A single-file demo; `system.log` and `market_data.parquet` are runtime deliverables.
+
+Note: the docs brand the project **Quant-Demo** (matching the repo), but `PRD.md` and the code
+still call it **HFT-Demo** — the PRD's §6.2 deliverable list mandates the filename
+`hft_binance_demo.py`, and the program's log lines / `--help` text print "HFT-Demo". Don't
+"fix" the mismatch in code without re-reading the PRD's deliverable names.
 
 ## Commands
 

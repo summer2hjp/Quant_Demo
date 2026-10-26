@@ -1,4 +1,4 @@
-# HFT-Demo
+# Quant-Demo
 
 轻量级实时高频行情处理与交易系统 Demo。接入 Binance 现货 WebSocket 流,经内存驻留、因子计算、策略判定后输出信号,并将原始行情微批落盘为 Parquet。
 
