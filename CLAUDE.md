@@ -13,6 +13,19 @@ still call it **HFT-Demo** — the PRD's §6.2 deliverable list mandates the fil
 `hft_binance_demo.py`, and the program's log lines / `--help` text print "HFT-Demo". Don't
 "fix" the mismatch in code without re-reading the PRD's deliverable names.
 
+## Documentation map
+
+- `PRD.md` — requirements source of truth. Anything not in it is out of scope (no order routing).
+- `TEST.md` — acceptance manual, TC-01…TC-15 with expected output and pass/fail criteria. Its §1
+  holds the offline self-check script; its FAQ (Q1–Q9) records **fixed defects** and **non-defects**
+  (e.g. low tps, `InvalidStatus` reconnects). Read the FAQ before "fixing" any symptom it lists.
+- `REPORT.md` — measured results per PRD criterion, plus §8 deviations and §9 known limitations.
+  §12 is a regression run after the precision/timezone change.
+- `README.md` — user-facing quick start and output schema (Chinese).
+
+When a measured number in this file conflicts with `REPORT.md`, `REPORT.md` wins — this file
+documents *invariants*, the report documents *observations*.
+
 ## Commands
 
 ```bash
@@ -21,15 +34,26 @@ pip install -r requirements.txt
 
 python hft_binance_demo.py                          # 15-minute run (900s), writes system.log + market_data.parquet
 python hft_binance_demo.py --duration 60            # quick smoke test
-python hft_binance_demo.py --help                   # --symbol / --output / --persist-batch / --no-uvloop / --no-raw ...
+python hft_binance_demo.py --help                   # --symbol / --output / --log-file / --ring-capacity /
+                                                    # --persist-batch / --stream-url / --no-uvloop / --no-raw
 
 # Verify persisted data (PRD 8.3, acceptance TC-04)
 python -c "import pyarrow.parquet as pq; df=pq.read_table('market_data.parquet').to_pandas(); print(len(df))"
 ```
 
-There is **no test suite and no build step.** Validation is ad hoc Python one-liners against the
-`RingBuffer` / `_evaluate` / `_flush` components, plus the live run itself. `pytest` is not installed.
-Anything you add to verify a change should follow that pattern — don't assume a harness exists.
+There is **no build step, no `pytest`, and no CI.** But there *is* an offline deterministic check:
+`TEST.md` §1 contains a full 18-assertion self-check script that exercises `RingBuffer`, the
+`_evaluate` signal logic on synthetic data, and the Parquet round-trip — **no network needed**. Copy
+it from the doc and run it after any change to those components; it is the accepted verification path,
+not an ad-hoc one-liner. The live run itself covers only the arrival-rate-dependent parts
+(`🚨 SIGNAL`, tps, RSS), which are non-deterministic by nature.
+
+The one-liner style below remains the right pattern for anything the self-check doesn't cover:
+
+```bash
+# RingBuffer overflow keeps the newest N, never reallocates
+python -c "from hft_binance_demo import RingBuffer as R; r=R(8); [r.put(float(i),1,0,0) for i in range(12)]; print(list(r.get_latest(8)[0]))"
+```
 
 ## Python version — matters
 
@@ -71,6 +95,28 @@ WebSocket → [byte filter + perf_counter_ns] → Ring Buffer
 500-tick strategy cadence and 5,000-row persistence batch are **decoupled with separate accumulators**.
 Merging them into one counter is the likeliest way to introduce a silent integrity bug.
 
+**`PERSIST_FLUSH_TIMEOUT = 60s` is the third number that matters.** `_persist_loop` awaits
+`queue.get()` with a 60s timeout and flushes whatever has accumulated if no tick arrives that long.
+Both mechanisms fire, and which one dominates depends on run length — the numbers settle it:
+
+| 运行 | 行数 / 批次数 | 平均每批 | 触发方式 |
+| :--- | :--- | :---: | :--- |
+| 15 分钟(35,935 / 8) | 4,492 | 7 批写满 5,000 + 935 残余 | **批量触发为主** |
+| 15 分钟(13,950 / 3) | 4,650 | 2 批写满 5,000 + 3,950 残余 | **批量触发为主** |
+| 45 秒(396 / 1) | 396 | 0 批写满 | 关闭时抽干 |
+
+At ~4–138 tps a 5,000-row batch takes roughly 1–20 minutes to fill, so over a 15-minute run it does
+fill — the exact `+5000` increments in the STATS lines are batch-full flushes, not timeouts. Short
+runs never fill a batch and rely on the shutdown drain. Don't read `落盘批次数` as
+"rows ÷ 5000": it also counts timeout flushes and the final drain, and `persisted` lags `received`
+by up to one batch until shutdown.
+
+**Empty ring buffer must short-circuit.** `RingBuffer.get_latest()` returns empty arrays when
+`n == 0` *before* computing the wrap-around slices. Removing that guard makes `start == end`, so
+`slice(start, capacity)` yields the whole uninitialized region — the program reads garbage prices on
+startup. This is a fixed defect (TEST.md Q8); the self-check's「空缓冲区返回空数组」assertion exists
+to keep it dead.
+
 ## Exchange integration notes
 
 **Precision — float64 for compute, raw strings for storage.** Binance sends `p`/`q` as fixed-point
@@ -94,6 +140,11 @@ that currently manifests here.
 used as (now − recv_ts) for latency. `recv_utc_ms` (UTC ms, default on) is the field to use for DB
 display; convert with `pd.to_datetime(x, unit="ms", utc=True).dt.tz_convert("Asia/Shanghai")`.
 
+`recv_utc_ms` is **gated on `keep_raw`**, not on its own flag — it is emitted as `0` when
+`--no-raw` is passed. There is no way to drop the raw string columns while keeping the wall-clock
+column; if a downstream consumer needs UTC wall-clock time from a minimal schema, that is a gap, not
+a config mistake. The extra `time.time_ns()` call costs ~0.007 ms of mean latency (REPORT §12).
+
 **Connection limits are respected by construction.** One WebSocket connection, one stream. Binance
 caps a single IP at 5 WS connections, so adding symbols should use Combined Streams over one
 connection (`ws/btcusdt@trade/ethusdt@trade`), not more connections. `--stream-url` accepts any
@@ -108,17 +159,22 @@ jitter so multiple instances don't reconnect in lockstep and trip the IP rate li
 ## Reality check: the PRD's tick-rate assumption is wrong
 
 `PRD.md` §1.1/§2.1 assumes ~2,000 ticks/sec. On the live stream that is not what BTCUSDT spot
-delivers — measured 17:09 2026-10-26, **~20–60 ticks/sec**, queue depth stayed 0 throughout. The
-meaningful guarantee is the relative one: **throughput ≥ received rate with no backlog and zero drops**
-(NFR-1), which holds. Don't "fix" the demo to hit 2,000 ticks/sec, and don't treat a low absolute rate
-as a defect — it's the exchange's arrival rate. Consequences to expect in a quiet market:
+delivers — REPORT.md §3/§12 record runs at **39.8** and **15.5 ticks/sec** mean (peaks 138 / 44.7),
+with queue depth at 0 throughout both. The variance between runs is intraday exchange activity, not
+code behavior. The meaningful guarantee is the relative one:
+**throughput ≥ received rate with no backlog and zero drops** (NFR-1), which holds. Don't "fix" the
+demo to hit 2,000 ticks/sec, and don't treat a low absolute rate as a defect — it's the exchange's
+arrival rate. Consequences to expect in a quiet market:
 
 - Only ~2 strategy evaluations in a 60s run, so **signals are unlikely in a short run**. TC-03
   (`🚨 SIGNAL`) needs either a long run or a volatile window. Lowering `PIPELINE_TRIGGER_TICKS`
   or `ZSCORE_*` thresholds to force a signal is a config knob, not a bug fix.
-- Peak RSS came in at **95 MB**, below the PRD's 150–250 MB band. Undershooting is fine.
+- Peak RSS came in at **95 MB**, below the PRD's 150–250 MB band. Undershooting is fine. RSS also
+  makes a **one-time step from ~51 MB to ~95 MB** when the first `ParquetWriter` is constructed
+  (TEST.md Q6) — that is buffer allocation, not a leak. What matters is that it stays flat afterwards.
 
-Latency targets are comfortably met (mean 0.017 ms vs <2.0 ms; max 1.7 ms vs <15.0 ms).
+Latency targets are comfortably met — REPORT.md §3/§12 show mean 0.013–0.020 ms against the
+<2.0 ms target and max 1.2–1.7 ms against <15.0 ms. Two orders of magnitude of headroom.
 
 ## Operational notes
 
