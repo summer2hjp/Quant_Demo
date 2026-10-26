@@ -303,6 +303,18 @@ python hft_binance_demo.py --persist-batch 999999 >/dev/null 2>&1; echo "退出�
 
 > ✅ **必须**:退出码 **`2`**。
 
+**日志文件不得被覆盖**——一次被拒绝的启动不该毁掉上次成功运行的日志:
+
+```bash
+cp system.log /tmp/_log_before.txt
+python hft_binance_demo.py --ring-capacity 100 2>/dev/null
+diff /tmp/_log_before.txt system.log && echo "✅ 日志未被覆盖"
+```
+
+> ✅ **必须**:输出 `✅ 日志未被覆盖`。
+>
+> ⚠️ 若此检查失败,说明参数校验发生在建日志文件之后——已建的文件会被 `mode="w"` 直接截断。本项目曾出现过该缺陷:一次 `--persist-batch 999999` 的误操作把整份 15 分钟运行日志覆盖成了一行报错。修复方式是将校验提到 `setup_logging()` 之前,错误改走 stderr。
+
 ---
 
 ### TC-02 快速冒烟运行(45 秒)
@@ -677,6 +689,14 @@ python hft_binance_demo.py --stream-url wss://<你的镜像>/ws/btcusdt@trade
 ### Q8:启动期读到内存中的随机价格值
 
 **结论**:这是**已修复的缺陷**。修复前空环形缓冲区的 `get_latest()` 会落入跨边界分支,`slice(start, capacity)` 返回整段未初始化内存而非空数组。阶段 1 的「空缓冲区返回空数组」用例专门覆盖此项。
+
+### Q9:`system.log` 只有一行 ERROR,15 分钟的日志没了
+
+**结论**:这是**已修复的缺陷**。修复前 `main()` 的顺序是「建日志文件 → 校验参数」,而日志文件以 `mode="w"` 打开会立即截断。所以一次参数写错的启动,就会把上次成功运行的完整日志覆盖成一行报错。
+
+修复后:参数校验在 `setup_logging()` 之前执行,校验失败走 stderr,**不创建日志文件**。TC-01 的「日志文件不得被覆盖」检查专门覆盖此项。
+
+> 💡 如果你现在看到的现象是 `system.log` 只有一行 `persist_batch(...) 必须在 [1, 100000] 区间`,那是修复前留下的残留文件——按 TC-01 重新验证即可,重新跑一次正式压测也会重建它。
 
 ---
 

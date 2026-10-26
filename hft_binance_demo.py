@@ -680,17 +680,30 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     return args
 
 
+def validate_args(args: argparse.Namespace) -> Optional[str]:
+    """校验命令行参数, 返回错误信息; 通过则返回 None。
+
+    必须在 setup_logging() 之前调用: 建日志文件用 mode="w" 会直接截断,
+    一次被拒绝的启动不该毁掉上一次成功运行的日志。
+    """
+    if args.ring_capacity < max(VWAP_WINDOW, MOMENTUM_WINDOW):
+        return "ring_capacity(%d) 必须 >= 因子窗口(%d), 否则无法计算 VWAP" % (
+            args.ring_capacity, VWAP_WINDOW)
+    if args.persist_batch < 1 or args.persist_batch > QUEUE_MAXSIZE:
+        return "persist_batch(%d) 必须在 [1, %d] 区间" % (args.persist_batch, QUEUE_MAXSIZE)
+    return None
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
-    logger = setup_logging(args.log_file)
 
-    if args.ring_capacity < max(VWAP_WINDOW, MOMENTUM_WINDOW):
-        logger.error("ring_capacity(%d) 必须 >= 因子窗口(%d), 否则无法计算 VWAP",
-                     args.ring_capacity, VWAP_WINDOW)
+    err = validate_args(args)
+    if err is not None:
+        # 走 stderr 而不是 logger: 校验失败时不得创建日志文件, 否则会截断上次运行的日志。
+        print("ERROR   %s" % err, file=sys.stderr)
         return 2
-    if args.persist_batch < 1 or args.persist_batch > QUEUE_MAXSIZE:
-        logger.error("persist_batch(%d) 必须在 [1, %d] 区间", args.persist_batch, QUEUE_MAXSIZE)
-        return 2
+
+    logger = setup_logging(args.log_file)
 
     logger.info("🚀 HFT-Demo 启动: symbol=%s duration=%.0fs output=%s log=%s",
                 args.symbol, args.duration, args.output, args.log_file)
