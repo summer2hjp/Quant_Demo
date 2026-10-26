@@ -8,7 +8,7 @@
 
 - [如何使用本文档](#如何使用本文档)
 - [阶段 0:准备环境(一次性,约 2 分钟)](#阶段-0准备环境一次性约-2-分钟)
-- [阶段 1:静态自检(不连网,约 10 秒)](#阶段-1静态自检不连网约-10-秒)
+- [阶段 1:静态自检(不连网,约 10 秒)](#阶段-1静态自检不连网约-10-秒) — `Test/acceptance_check.py`
 - [阶段 2:功能测试 TC-01 ~ TC-10](#阶段-2功能测试)
 - [阶段 3:正式 15 分钟压测](#阶段-3正式-15-分钟压测)
 - [判定汇总表](#判定汇总表)
@@ -110,146 +110,19 @@ python hft_binance_demo.py --help | head -5
 
 这一步验证**确定性逻辑**:环形缓冲区、策略信号、落盘往返。不需要网络,结果是固定的。
 
-### 1.1 保存自检脚本
+脚本已提交在 `Test/acceptance_check.py`,与本文档同目录;后续新增的测试文件也统一放这个目录。
+
+### 1.1 运行自检脚本
 
 ```bash
-cat > /tmp/acceptance_check.py << 'PYEOF'
-#!/usr/bin/env python3
-"""Quant-Demo 静态自检: 不连网, 只验证确定性的逻辑正确性。"""
-import argparse, asyncio, logging, sys, time
-import numpy as np
-import pyarrow.parquet as pq
-from decimal import Decimal
-from hft_binance_demo import (HFTPipeline, RingBuffer, PARQUET_COLUMNS,
-                              PARQUET_COLUMNS_FULL, PARQUET_SCHEMA, PARQUET_SCHEMA_FULL)
-
-FAIL = []
-
-def check(name, cond, detail=""):
-    print("  [%s] %s %s" % ("PASS" if cond else "FAIL", name, detail))
-    if not cond:
-        FAIL.append(name)
-
-def make(keep_raw=True, batch=2, cap=10000):
-    a = argparse.Namespace(symbol="BTCUSDT", output="/tmp/_ac.parquet", duration=1,
-                           ring_capacity=cap, persist_batch=batch, stream_url=None,
-                           keep_raw=keep_raw)
-    return HFTPipeline(a, logging.getLogger("ac"))
-
-print("== 1. 环形缓冲区 ==")
-rb = RingBuffer(8)
-for i in range(12):
-    rb.put(float(i), 1.0, i, i)
-check("溢出覆盖: 保留最新 8 条", list(rb.get_latest(8)[0]) == list(range(4, 12)))
-r8 = RingBuffer(8)
-for i in range(8):
-    r8.put(float(i), 1.0, i, i)
-check("整圈满载返回全部", list(r8.get_latest(8)[0]) == list(range(8)))
-check("空缓冲区返回空数组", len(RingBuffer(4).get_latest(10)[0]) == 0)
-check("越界请求被 clamp", len(r8.get_latest(10**6)[0]) == 8)
-
-print("== 2. 策略信号逻辑 (合成数据, 确定性) ==")
-# SELL: 长期平稳 -> 连续冲高 -> 冲高后回落 (z>2 且 momentum<0)
-p = make()
-for i in range(1000):
-    p._ring.put(100000.0, 1.0, i, i)
-for i in range(1, 11):
-    p._ring.put(100000.0 + i * 3000.0, 1.0, 1000 + i, 1000 + i)
-p._evaluate()
-check("z 高但动量同向时不触发", p.signals_sell == 0 and p.signals_buy == 0)
-for i in range(1, 6):
-    p._ring.put(100000.0 + (10 - i) * 3000.0, 1.0, 1011 + i, 1011 + i)
-p._evaluate()
-check("SELL: z>2.0 且 momentum<0", p.signals_sell == 1)
-
-# BUY: 长期高位 -> 砸盘 -> 反弹 (z<-2 且 momentum>0)
-p2 = make()
-for i in range(1000):
-    p2._ring.put(110000.0, 1.0, i, i)
-for i in range(1, 11):
-    p2._ring.put(110000.0 - i * 3000.0, 1.0, 1000 + i, 1000 + i)
-for i in range(1, 6):
-    p2._ring.put(80000.0 + i * 5000.0, 1.0, 1011 + i, 1011 + i)
-p2._evaluate()
-check("BUY: z<-2.0 且 momentum>0", p2.signals_buy == 1 and p2.signals_sell == 0)
-
-# 预热门控
-p3 = make()
-for i in range(400):
-    p3._ring.put(100000.0 + i, 1.0, i, i)
-p3._evaluate()
-check("预热期 (数据不足 1000) 不判定信号", p3.signals_buy + p3.signals_sell == 0)
-
-print("== 3. 落盘往返 ==")
-async def feed(pipe, n=6000):
-    rows = [(100000.0 + i * 0.5, 1.5 + (i % 3), 1_700_000_000 + i,
-             time.perf_counter_ns() - i, time.time_ns() // 1_000_000,
-             "100000.%08d" % (i * 50), "1.500000") if pipe.keep_raw else
-            (100000.0 + i * 0.5, 1.5 + (i % 3), 1_700_000_000 + i,
-             time.perf_counter_ns() - i)
-            for i in range(n)]
-    for r in rows:
-        pipe._queue.put_nowait(r)
-    for _ in range(n // pipe.persist_batch):
-        await pipe._flush([pipe._queue.get_nowait() for _ in range(pipe.persist_batch)])
-    await pipe._flush([pipe._queue.get_nowait() for _ in range(pipe._queue.qsize())])
-    await pipe._drain_and_close()
-
-pa = make(keep_raw=True, batch=5000)
-asyncio.run(feed(pa))
-t = pq.read_table("/tmp/_ac.parquet"); d = t.to_pandas()
-check("无损模式 7 列", list(d.columns) == list(PARQUET_COLUMNS_FULL), str(list(d.columns)))
-check("无损模式类型对齐",
-      [t.schema.field(c).type for c in t.column_names] == [f.type for f in PARQUET_SCHEMA_FULL])
-check("数值往返正确", np.allclose(d.price.values, [100000.0 + i * 0.5 for i in range(6000)]))
-check("exchange_ts 往返正确",
-      np.array_equal(d.exchange_ts.values, [1_700_000_000 + i for i in range(6000)]))
-check("原始字符串往返正确",
-      list(d.price_raw)[:3] == ["100000.%08d" % (i * 50) for i in range(3)])
-check("price_raw 确为字符串类型", d.price_raw.dtype == object and isinstance(d.price_raw[0], str))
-
-# 真正检验无损: 写入一个 float64 无法精确表示的 12 位定点小数
-pp = make(keep_raw=True, batch=1)
-raw_val = "123456789.123456789"
-async def one_row(pipe):
-    pipe._queue.put_nowait((float(raw_val), 1.0, 1, 2, 3, raw_val, "0.100000000123456789"))
-    await pipe._flush([pipe._queue.get_nowait()])
-    await pipe._drain_and_close()
-pp.output = "/tmp/_ac_prec.parquet"
-asyncio.run(one_row(pp))
-rd = pq.read_table("/tmp/_ac_prec.parquet").to_pandas().iloc[0]
-check("无损: 12 位定点小数原样保留", rd.price_raw == raw_val, "读回=%r" % rd.price_raw)
-check("证明 float64 确实会丢精度 (对照)",
-      Decimal(repr(float(raw_val))) != Decimal(raw_val),
-      "float64=%r vs raw=%s" % (repr(float(raw_val)), raw_val))
-
-pb = make(keep_raw=False, batch=5000)
-pb.output = "/tmp/_ac_noraw.parquet"
-asyncio.run(feed(pb))
-t2 = pq.read_table("/tmp/_ac_noraw.parquet"); d2 = t2.to_pandas()
-check("--no-raw 模式回到 PRD 5.2 四列", list(d2.columns) == list(PARQUET_COLUMNS), str(list(d2.columns)))
-
-pe = make()
-asyncio.run(pe._drain_and_close())
-check("无数据收尾不报错且 writer 未创建", pe._writer is None)
-
-print()
-print("=" * 52)
-if FAIL:
-    print("❌ %d 项未通过: %s" % (len(FAIL), FAIL))
-    sys.exit(1)
-print("✅ 全部静态自检通过")
-sys.exit(0)
-PYEOF
+python Test/acceptance_check.py; echo "退出码: $?"
 ```
 
-### 1.2 运行
+> 脚本已纳入版本控制(`Test/acceptance_check.py`),无需粘贴保存。
+> 从**任何工作目录**执行均可——脚本会自动把仓库根目录加入 `sys.path`,不依赖当前目录。
 
-```bash
-python /tmp/acceptance_check.py; echo "退出码: $?"
-```
+### 1.2 期望输出
 
-### 1.3 期望输出
 
 ```
 == 1. 环形缓冲区 ==
@@ -619,7 +492,7 @@ grep -E "进入收尾流程|总接收|总落盘|完整性" /tmp/_tc_int.log
 
 | 编号 | 测试项 | 标记 | 阈值 | 实测 | 通过 |
 | :--- | :--- | :---: | :--- | :--- | :---: |
-| 1 | 静态自检 18 项 | ✅ | 全 PASS, 退出码 0 | | ☐ |
+| 1 | 静态自检 18 项 | ✅ | `Test/acceptance_check.py` 全 PASS, 退出码 0 | | ☐ |
 | TC-01 | 参数校验 | ✅ | 退出码 2 | | ☐ |
 | TC-02 | 冒烟运行 | ✅ | 退出码 0, 报告打印 | | ☐ |
 | TC-03 | 数据完整性 | ✅ | 接收 == 落盘, 丢包 0.0000% | | ☐ |

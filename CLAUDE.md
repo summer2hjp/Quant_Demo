@@ -16,9 +16,11 @@ still call it **HFT-Demo** — the PRD's §6.2 deliverable list mandates the fil
 ## Documentation map
 
 - `PRD.md` — requirements source of truth. Anything not in it is out of scope (no order routing).
-- `TEST.md` — acceptance manual, TC-01…TC-15 with expected output and pass/fail criteria. Its §1
-  holds the offline self-check script; its FAQ (Q1–Q9) records **fixed defects** and **non-defects**
-  (e.g. low tps, `InvalidStatus` reconnects). Read the FAQ before "fixing" any symptom it lists.
+- `Test/TEST.md` — acceptance manual, TC-01…TC-15 with expected output and pass/fail criteria.
+  Its FAQ (Q1–Q9) records **fixed defects** and **non-defects** (e.g. low tps, `InvalidStatus`
+  reconnects). Read the FAQ before "fixing" any symptom it lists.
+- `Test/acceptance_check.py` — the offline 18-assertion self-check, committed and runnable from any
+  working directory: `python Test/acceptance_check.py`. Exit 0 = pass, 1 = failure.
 - `REPORT.md` — measured results per PRD criterion, plus §8 deviations and §9 known limitations.
   §12 is a regression run after the precision/timezone change.
 - `README.md` — user-facing quick start and output schema (Chinese).
@@ -41,12 +43,12 @@ python hft_binance_demo.py --help                   # --symbol / --output / --lo
 python -c "import pyarrow.parquet as pq; df=pq.read_table('market_data.parquet').to_pandas(); print(len(df))"
 ```
 
-There is **no build step, no `pytest`, and no CI.** But there *is* an offline deterministic check:
-`TEST.md` §1 contains a full 18-assertion self-check script that exercises `RingBuffer`, the
-`_evaluate` signal logic on synthetic data, and the Parquet round-trip — **no network needed**. Copy
-it from the doc and run it after any change to those components; it is the accepted verification path,
-not an ad-hoc one-liner. The live run itself covers only the arrival-rate-dependent parts
-(`🚨 SIGNAL`, tps, RSS), which are non-deterministic by nature.
+There is **no build step, no `pytest`, and no CI.** There *is* a committed offline self-check,
+`Test/acceptance_check.py` — 18 assertions over `RingBuffer`, the `_evaluate` signal logic on
+synthetic data, and the Parquet round-trip. **No network needed**:
+`python Test/acceptance_check.py` (exit 0 = pass, 1 = failure). Run it after any change to those
+components; it is the accepted verification path, not an ad-hoc one-liner. The live run covers only
+the arrival-rate-dependent parts (`🚨 SIGNAL`, tps, RSS), which are non-deterministic by nature.
 
 The one-liner style below remains the right pattern for anything the self-check doesn't cover:
 
@@ -114,7 +116,7 @@ by up to one batch until shutdown.
 **Empty ring buffer must short-circuit.** `RingBuffer.get_latest()` returns empty arrays when
 `n == 0` *before* computing the wrap-around slices. Removing that guard makes `start == end`, so
 `slice(start, capacity)` yields the whole uninitialized region — the program reads garbage prices on
-startup. This is a fixed defect (TEST.md Q8); the self-check's「空缓冲区返回空数组」assertion exists
+startup. This is a fixed defect (Test/TEST.md Q8); the self-check's「空缓冲区返回空数组」assertion exists
 to keep it dead.
 
 ## Exchange integration notes
@@ -171,7 +173,7 @@ arrival rate. Consequences to expect in a quiet market:
   or `ZSCORE_*` thresholds to force a signal is a config knob, not a bug fix.
 - Peak RSS came in at **95 MB**, below the PRD's 150–250 MB band. Undershooting is fine. RSS also
   makes a **one-time step from ~51 MB to ~95 MB** when the first `ParquetWriter` is constructed
-  (TEST.md Q6) — that is buffer allocation, not a leak. What matters is that it stays flat afterwards.
+  (Test/TEST.md Q6) — that is buffer allocation, not a leak. What matters is that it stays flat afterwards.
 
 Latency targets are comfortably met — REPORT.md §3/§12 show mean 0.013–0.020 ms against the
 <2.0 ms target and max 1.2–1.7 ms against <15.0 ms. Two orders of magnitude of headroom.
