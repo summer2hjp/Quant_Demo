@@ -1,0 +1,64 @@
+2026-10-27 08:54:17.112 INFO    🚀 HFT-Demo 启动: symbol=BTCUSDT duration=900s output=market_data.parquet log=system.log
+2026-10-27 08:54:17.112 INFO    配置: ring=2000000 触发=500ticks VWAP窗=1000 动量窗=10 队列=100000 微批=5000
+2026-10-27 08:54:17.112 INFO    部署参数: 刷盘兜底=60.0s 重连=2.0→30.0s 观测=30.0s
+2026-10-27 08:54:17.112 INFO    落盘精度: 无损保留币安原始字符串 (price_raw/quantity_raw) + recv_utc_ms 墙钟时间
+2026-10-27 08:54:17.764 INFO    ✅ WebSocket connected: wss://stream.binance.com:9443/ws/btcusdt@trade
+2026-10-27 08:54:47.159 INFO    📊 STATS received=490 persisted=0 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=16 peak_tps=16 ingest_lat_avg=0.017 max=0.221 ms rss=51.9 MB
+2026-10-27 08:54:49.374 INFO    ⏳ 因子引擎预热中: 已有 500/1000 ticks, 暂不判定信号
+2026-10-27 08:55:17.161 INFO    📊 STATS received=907 persisted=0 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=14 peak_tps=16 ingest_lat_avg=0.018 max=0.397 ms rss=51.9 MB
+2026-10-27 08:55:47.163 INFO    📊 STATS received=1281 persisted=0 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=12 peak_tps=16 ingest_lat_avg=0.018 max=2.509 ms rss=51.9 MB
+2026-10-27 08:56:17.165 INFO    📊 STATS received=1410 persisted=0 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=4 peak_tps=16 ingest_lat_avg=0.020 max=2.509 ms rss=51.9 MB
+2026-10-27 08:56:47.166 INFO    📊 STATS received=2089 persisted=0 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=23 peak_tps=23 ingest_lat_avg=0.016 max=2.509 ms rss=52.2 MB
+2026-10-27 08:57:17.167 INFO    📊 STATS received=2619 persisted=0 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=18 peak_tps=23 ingest_lat_avg=0.015 max=2.509 ms rss=52.4 MB
+2026-10-27 08:57:47.169 INFO    📊 STATS received=2711 persisted=0 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=3 peak_tps=23 ingest_lat_avg=0.016 max=2.509 ms rss=52.4 MB
+2026-10-27 08:58:17.170 INFO    📊 STATS received=2988 persisted=0 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=9 peak_tps=23 ingest_lat_avg=0.017 max=2.509 ms rss=52.6 MB
+2026-10-27 08:58:47.172 INFO    📊 STATS received=3586 persisted=0 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=20 peak_tps=23 ingest_lat_avg=0.019 max=2.509 ms rss=52.8 MB
+2026-10-27 08:59:17.173 INFO    📊 STATS received=3915 persisted=0 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=11 peak_tps=23 ingest_lat_avg=0.020 max=2.509 ms rss=53.0 MB
+2026-10-27 08:59:47.175 INFO    📊 STATS received=4088 persisted=0 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=6 peak_tps=23 ingest_lat_avg=0.020 max=2.509 ms rss=53.1 MB
+2026-10-27 09:00:17.176 INFO    📊 STATS received=5914 persisted=5000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=61 peak_tps=61 ingest_lat_avg=0.018 max=2.509 ms rss=98.1 MB
+2026-10-27 09:00:47.178 INFO    📊 STATS received=6421 persisted=5000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=17 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:01:17.179 INFO    📊 STATS received=6801 persisted=5000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=13 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:01:47.181 INFO    📊 STATS received=7448 persisted=5000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=22 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:02:17.184 INFO    📊 STATS received=7909 persisted=5000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=15 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:02:47.186 INFO    📊 STATS received=8227 persisted=5000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=11 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:03:17.189 INFO    📊 STATS received=8639 persisted=5000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=14 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:03:47.192 INFO    📊 STATS received=9442 persisted=5000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=27 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:04:17.195 INFO    📊 STATS received=10033 persisted=10000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=20 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:04:47.198 INFO    📊 STATS received=10254 persisted=10000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=7 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:05:17.200 INFO    📊 STATS received=10898 persisted=10000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=21 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:05:47.204 INFO    📊 STATS received=11285 persisted=10000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=13 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:06:17.206 INFO    📊 STATS received=12588 persisted=10000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=43 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:06:47.209 INFO    📊 STATS received=13433 persisted=10000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=28 peak_tps=61 ingest_lat_avg=0.019 max=2.509 ms rss=98.2 MB
+2026-10-27 09:07:17.212 INFO    📊 STATS received=15545 persisted=15000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=70 peak_tps=70 ingest_lat_avg=0.018 max=2.509 ms rss=98.2 MB
+2026-10-27 09:07:47.215 INFO    📊 STATS received=16053 persisted=15000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=17 peak_tps=70 ingest_lat_avg=0.018 max=2.509 ms rss=98.2 MB
+2026-10-27 09:08:36.636 INFO    📊 STATS received=16057 persisted=15000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=0 peak_tps=70 ingest_lat_avg=0.018 max=2.509 ms rss=98.2 MB
+2026-10-27 09:09:06.639 INFO    📊 STATS received=17535 persisted=15000 queue_depth=0 dropped=0 signals=0 (BUY 0 / SELL 0) tps=49 peak_tps=70 ingest_lat_avg=0.017 max=2.509 ms rss=98.2 MB
+2026-10-27 09:09:17.161 INFO    进入收尾流程 (原因: 达到运行时长 900 秒)
+2026-10-27 09:09:19.170 INFO    ==============================================================
+2026-10-27 09:09:19.170 INFO                        📈 HFT-Demo 性能验证报告
+2026-10-27 09:09:19.170 INFO    ==============================================================
+2026-10-27 09:09:19.170 INFO    运行时长                 :     863.24 s
+2026-10-27 09:09:19.170 INFO    总接收 Tick 数           :        17640
+2026-10-27 09:09:19.170 INFO    总落盘 Tick 数           :        17640
+2026-10-27 09:09:19.170 INFO    落盘丢弃条数             :            0
+2026-10-27 09:09:19.170 INFO    丢包率                   :      0.0000%
+2026-10-27 09:09:19.170 INFO    数据完整性 (TC-04)       :       PASS  (received == persisted)
+2026-10-27 09:09:19.170 INFO    --------------------------------------------------------------
+2026-10-27 09:09:19.170 INFO    平均处理速率             :       20.4 ticks/sec
+2026-10-27 09:09:19.171 INFO    峰值窗口处理速率         :       70.4 ticks/sec
+2026-10-27 09:09:19.171 INFO    策略管线触发次数         :           35
+2026-10-27 09:09:19.171 INFO    信号总数 (BUY / SELL)    :        0 (   0 /    0)
+2026-10-27 09:09:19.171 INFO    --------------------------------------------------------------
+2026-10-27 09:09:19.171 INFO    平均端到端延迟 (NFR-1)   :     0.017 ms   目标 < 2.0 ms   PASS
+2026-10-27 09:09:19.171 INFO    最大端到端延迟           :     2.509 ms   目标 < 15.0 ms  PASS
+2026-10-27 09:09:19.171 INFO    样本数                   :        17640
+2026-10-27 09:09:19.171 INFO    信号延迟 平均/最大       :    0.000 ms /    0.000 ms  (n=0)
+2026-10-27 09:09:19.171 INFO    --------------------------------------------------------------
+2026-10-27 09:09:19.171 INFO    峰值 RSS (NFR-2)         :      98.2 MB     目标 150 - 250 MB
+2026-10-27 09:09:19.171 INFO    WS 重连次数              :            0
+2026-10-27 09:09:19.171 INFO    过滤非交易消息数         :            0
+2026-10-27 09:09:19.171 INFO    落盘批次数 (微批)        :            4
+2026-10-27 09:09:19.171 INFO    落盘 Schema              : price,quantity,exchange_ts,recv_ts,recv_utc_ms,price_raw,quantity_raw
+2026-10-27 09:09:19.171 INFO    落盘文件                 : market_data.parquet
+2026-10-27 09:09:19.171 INFO    ==============================================================
+2026-10-27 09:09:19.174 INFO    ✅ 运行结束
