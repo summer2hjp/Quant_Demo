@@ -75,7 +75,7 @@ python hft_binance_demo.py --help             # 全部参数
 
 ```bash
 docker build -t quantedemo .                     # 构建
-
+docker compose up -d                             # 启动
 docker run --rm quantedemo selfcheck             # 离线自检 18 项, 不连网, 退出码 0 = 通过
 docker run --rm quantedemo --duration 60         # 冒烟测试
 docker run --rm quantedemo --duration 900        # 15 分钟压测
