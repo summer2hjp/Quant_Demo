@@ -71,6 +71,12 @@ RECONNECT_MAX_SECONDS = 30.0        # 退避上限
 RUN_SECONDS = 900.0                 # 15 分钟压力测试
 STATS_INTERVAL_SECONDS = 30.0       # 观测日志间隔
 
+# 墙钟与 perf_counter 的偏差告警阈值 (秒)。
+# perf_counter 在宿主机挂起/休眠期间不前进, 而日志时间戳用的墙钟会继续走; 两者拉开
+# 就是宿主机的实际挂起时长。挂起期间进程零消息到达、落盘队列从不紊动, 吞吐与延迟指标
+# 全部显示 PASS, 只有这里能看见那段空白 —— 见 REPORT.md §13。
+WALL_PERF_WARN_SECONDS = 5.0
+
 # 落盘 Schema (PRD 5.2 核心四列)
 PARQUET_COLUMNS = ("price", "quantity", "exchange_ts", "recv_ts")
 PARQUET_SCHEMA = pa.schema([
@@ -260,6 +266,8 @@ class HFTPipeline:
 
         # 统计口径
         self.start_ts = time.perf_counter()
+        self.start_wall = time.time()          # 墙钟基准, 用于检测宿主机挂起
+        self._divergence_warned = False
         self.received = 0
         self.persisted = 0
         self.dropped_persist = 0        # 队列满导致丢弃的条数
@@ -593,27 +601,45 @@ class HFTPipeline:
             await asyncio.sleep(self.stats_interval)
             self._log_stats()
 
+    def clock_divergence(self) -> float:
+        """墙钟耗时 - perf_counter 耗时 (秒)。
+
+        正常运行时两者完全一致。宿主机挂起/休眠时墙钟继续走而 perf_counter 不前进,
+        差值即实际挂起时长。
+        """
+        return (time.time() - self.start_wall) - (time.perf_counter() - self.start_ts)
+
     def _log_stats(self) -> None:
         elapsed = time.perf_counter() - self.start_ts
+        divergence = self.clock_divergence()
         interval_tps = self._window_received / self.stats_interval
         if interval_tps > self._window_peak_tps:
             self._window_peak_tps = interval_tps
         self._window_received = 0
 
+        if divergence > WALL_PERF_WARN_SECONDS and not self._divergence_warned:
+            self._divergence_warned = True
+            self.logger.warning(
+                "⚠️ 墙钟与 perf_counter 偏差已达 %.1f 秒: 宿主机在此期间挂起/休眠过。"
+                "这段空白内零消息到达, 吞吐与延迟指标不会反映它, 报告中的运行时长也会偏小",
+                divergence)
+
         self.logger.info(
             "📊 STATS received=%d persisted=%d queue_depth=%d dropped=%d "
             "signals=%d (BUY %d / SELL %d) tps=%.0f peak_tps=%.0f "
-            "ingest_lat_avg=%.3f max=%.3f ms rss=%.1f MB",
+            "ingest_lat_avg=%.3f max=%.3f ms rss=%.1f MB diverge=%.2fs",
             self.received, self.persisted, self._queue.qsize(), self.dropped_persist,
             self.signals_buy + self.signals_sell, self.signals_buy, self.signals_sell,
             interval_tps, self._window_peak_tps,
             self.ingest_latency.mean_ms, self.ingest_latency.peak,
-            peak_rss_mb() or -1.0,
+            peak_rss_mb() or -1.0, divergence,
         )
 
     # ---------------- 性能验证报告 (NFR-3 / 交付物 5) ----------------
     def report(self) -> None:
         elapsed = time.perf_counter() - self.start_ts
+        wall_elapsed = time.time() - self.start_wall
+        divergence = wall_elapsed - elapsed
         total = self.received
         drop_rate = (self.dropped_persist / total * 100.0) if total else 0.0
         avg_tps = total / elapsed if elapsed else 0.0
@@ -625,7 +651,11 @@ class HFTPipeline:
             "=" * 62,
             "                    📈 HFT-Demo 性能验证报告",
             "=" * 62,
-            "运行时长                 : %10.2f s" % elapsed,
+            "运行时长 (perf_counter)  : %10.2f s" % elapsed,
+            "墙钟耗时 / 时钟偏差      : %10.2f s / %8.2f s%s"
+            % (wall_elapsed, divergence,
+               "   ⚠️ 宿主机曾挂起, 上行为实际经过时间"
+               if divergence > WALL_PERF_WARN_SECONDS else ""),
             "总接收 Tick 数           : %12d" % total,
             "总落盘 Tick 数           : %12d" % self.persisted,
             "落盘丢弃条数             : %12d" % self.dropped_persist,
