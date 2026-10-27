@@ -16,6 +16,10 @@ still call it **HFT-Demo** — the PRD's §6.2 deliverable list mandates the fil
 ## Documentation map
 
 - `PRD.md` — requirements source of truth. Anything not in it is out of scope (no order routing).
+- `INTERFACE.md` — interface contracts: process/CLI/exit codes, upstream WS fields, Parquet schema,
+  log field formats, internal component APIs, concurrency model, and §9's list of **intentional
+  contract gaps** (misleading queue type annotations, no file on a zero-data run, malformed trade
+  messages breaking the connection). Read §9 before "fixing" anything there.
 - `Test/TEST.md` — acceptance manual, TC-01…TC-15 with expected output and pass/fail criteria.
   Its FAQ (Q1–Q9) records **fixed defects** and **non-defects** (e.g. low tps, `InvalidStatus`
   reconnects). Read the FAQ before "fixing" any symptom it lists.
