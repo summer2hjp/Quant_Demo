@@ -37,7 +37,7 @@ market_data.parquet
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-python hft_binance_demo.py          # 15 分钟压力测试 (900 秒)
+python hft_binance_demo.py --duration 900     # 15 分钟压力测试 (900 秒)
 ```
 
 程序运行结束会自动打印性能验证报告,并写出 `market_data.parquet` 与 `system.log`。
